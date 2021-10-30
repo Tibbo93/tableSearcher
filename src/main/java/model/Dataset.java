@@ -1,9 +1,12 @@
 package model;
 
+import com.google.gson.GsonBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -70,5 +73,24 @@ public class Dataset {
                         Map.Entry::getKey,
                         Map.Entry::getValue,
                         (oldValue, newValue) -> oldValue, LinkedHashMap::new));
+    }
+
+    @Override
+    public String toString() {
+        return "Numero totale di tabelle: " + this.tablesCounter +
+                "Numero totale di righe: " + this.rowsCounter +
+                "Numero totale di colonne: " + this.colsCounter +
+                "Numero totale di valori nulli: " + this.nullValuesCounter +
+                "Numero medio di righe: " + this.rowsCounter / (float) this.tablesCounter +
+                "Numero medio di colonne: " + this.colsCounter / (float) this.tablesCounter;
+    }
+
+    public void exportDataset() {
+        String jsonString = new GsonBuilder().setPrettyPrinting().create().toJson(this);
+        try (FileWriter file = new FileWriter("statistics.json")) {
+            file.write(jsonString);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
