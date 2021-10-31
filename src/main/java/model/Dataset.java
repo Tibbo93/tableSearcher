@@ -93,4 +93,18 @@ public class Dataset {
             e.printStackTrace();
         }
     }
+
+    public void updateDataset(int rows, int cols) {
+        //UPDATE STATISTICS HASHMAP
+        this.incrementTablesCounter();
+        this.incrementRowsCounter(rows);
+        this.incrementColsCounter(cols);
+
+        //UPDATE DISTRIBUTIONS HASHMAP
+        if (!this.getRowsDistribution().containsKey(rows)) this.getRowsDistribution().put(rows, 1);
+        else this.incrementRowsDistribution(rows, rows);
+
+        if (!this.getColsDistribution().containsKey(cols)) this.getColsDistribution().put(cols, 1);
+        else this.incrementColsDistribution(cols, cols);
+    }
 }
