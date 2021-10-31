@@ -1,6 +1,8 @@
-package model;
+package model.deserializer;
 
 import com.google.gson.*;
+import model.Cell;
+import model.Table;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
