@@ -6,16 +6,13 @@ import lombok.Data;
 import model.Dataset;
 import model.Table;
 import model.deserializer.TableDeserializer;
-import org.apache.lucene.analysis.core.LowerCaseFilterFactory;
-import org.apache.lucene.analysis.custom.CustomAnalyzer;
-import org.apache.lucene.analysis.miscellaneous.WordDelimiterGraphFilterFactory;
-import org.apache.lucene.analysis.standard.StandardTokenizerFactory;
 import org.apache.lucene.codecs.simpletext.SimpleTextCodec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
@@ -25,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Locale;
 
 @Data
 public class TableSearcher {
@@ -43,14 +41,7 @@ public class TableSearcher {
             this.indexPathDirectory = FSDirectory.open(indexPath);
             this.writer = new IndexWriter(
                     this.indexPathDirectory,
-                    new IndexWriterConfig(
-                            CustomAnalyzer.builder()
-                                    .withTokenizer(StandardTokenizerFactory.NAME)
-                                    .addTokenFilter(LowerCaseFilterFactory.NAME)
-                                    .addTokenFilter(WordDelimiterGraphFilterFactory.NAME)
-                                    .build()
-                    )
-                            .setCodec(new SimpleTextCodec()));
+                    new IndexWriterConfig().setCodec(new SimpleTextCodec()));
         } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
         }
@@ -65,6 +56,7 @@ public class TableSearcher {
                 new InputStreamReader(
                         new FileInputStream(jsonPath), StandardCharsets.UTF_8))) {
 
+            this.writer.deleteAll();
             jsonReader.setLenient(true);
 
             while (jsonReader.hasNext() && jsonReader.peek() != JsonToken.END_DOCUMENT) {
@@ -73,6 +65,7 @@ public class TableSearcher {
                 createDocument(table);
                 dataset.updateDataset(table.getMaxDimensions().getRow() + 1, table.getMaxDimensions().getColumn() + 1);
             }
+            this.writer.commit();
         } catch (FileNotFoundException e) {
             System.out.println("Error: FILE NOT FOUND");
         } catch (IOException e) {
@@ -81,24 +74,26 @@ public class TableSearcher {
     }
 
     public void createDocument(Table table) {
-        Document document = new Document();
-
-        try {
-            table.getColumns()
-                    .forEach((col, list) ->
+        table.getColumns()
+                .forEach((col, list) -> {
+                            Document document = new Document();
                             list.forEach(cell -> {
                                 if (cell.isHeader()) {
-                                    document.add(new TextField("header", cell.getCleanedText(), Field.Store.YES));
+                                    document.add(new StringField("header", cell.getCleanedText().toLowerCase(Locale.ROOT), Field.Store.YES));
                                 } else if (cell.getCleanedText().isEmpty()) {
                                     this.dataset.incrementNullValueCounter();
                                 } else {
-                                    document.add(new TextField("content", cell.getCleanedText(), Field.Store.YES));
+                                    document.add(new StringField("content", cell.getCleanedText().toLowerCase(Locale.ROOT), Field.Store.YES));
                                 }
-                            }));
-
-            this.writer.addDocument(document);
-        } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
-        }
+                            });
+                            int distinctValues = (int) document.getFields().stream().map(IndexableField::stringValue).distinct().count();
+                            this.dataset.updateDistribution(dataset.getDistinctValuesDistribution(), distinctValues);
+                            try {
+                                this.writer.addDocument(document);
+                            } catch (IOException e) {
+                                System.out.println("Error: " + e.getMessage());
+                            }
+                        }
+                );
     }
 }

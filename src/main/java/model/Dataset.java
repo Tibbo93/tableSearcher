@@ -7,10 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.TreeMap;
 
 @Data
 @AllArgsConstructor
@@ -20,12 +17,9 @@ public class Dataset {
     private int rowsCounter;
     private int colsCounter;
     private int nullValuesCounter;
-    private final HashMap<Integer, Integer> rowsDistribution = new HashMap<>();
-    private final HashMap<Integer, Integer> colsDistribution = new HashMap<>();
-    private final HashMap<Integer, Integer> distinctValueDistribution = new HashMap<>();
-//        statistics.put("averageRows", 0);
-//        statistics.put("averageCols", 0);
-//        statistics.put("averageNullValue", 0);
+    private final TreeMap<Integer, Integer> rowsDistribution = new TreeMap<>();
+    private final TreeMap<Integer, Integer> colsDistribution = new TreeMap<>();
+    private final TreeMap<Integer, Integer> distinctValuesDistribution = new TreeMap<>();
 
     public void incrementTablesCounter() {
         this.tablesCounter++;
@@ -43,46 +37,25 @@ public class Dataset {
         this.nullValuesCounter++;
     }
 
-    public void incrementRowsDistribution(Integer key, Integer count) {
-        this.rowsDistribution.put(key, this.rowsDistribution.get(key) + 1);
-    }
-
-    public void incrementColsDistribution(Integer key, Integer count) {
-        this.colsDistribution.put(key, this.colsDistribution.get(key) + 1);
-    }
-
-    public void incrementDistinctValueDistribution(Integer key, Integer count) {
-        this.distinctValueDistribution.put(key, this.distinctValueDistribution.get(key) + 1);
-    }
-
-    public LinkedHashMap<Integer, Integer> sortRowsDistribution() {
-        return this.rowsDistribution.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByKey())
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (oldValue, newValue) -> oldValue, LinkedHashMap::new));
-    }
-
-    public LinkedHashMap<Integer, Integer> sortColsDistribution() {
-        return this.colsDistribution.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByKey())
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (oldValue, newValue) -> oldValue, LinkedHashMap::new));
-    }
-
     @Override
     public String toString() {
         return "Numero totale di tabelle: " + this.tablesCounter +
-                "Numero totale di righe: " + this.rowsCounter +
-                "Numero totale di colonne: " + this.colsCounter +
-                "Numero totale di valori nulli: " + this.nullValuesCounter +
-                "Numero medio di righe: " + this.rowsCounter / (float) this.tablesCounter +
-                "Numero medio di colonne: " + this.colsCounter / (float) this.tablesCounter;
+                "\nNumero totale di righe: " + this.rowsCounter +
+                "\nNumero totale di colonne: " + this.colsCounter +
+                "\nNumero totale di valori nulli: " + this.nullValuesCounter +
+                "\nNumero medio di righe: " + this.rowsCounter / (float) this.tablesCounter +
+                "\nNumero medio di colonne: " + this.colsCounter / (float) this.tablesCounter +
+                "\nDistribuzione numero di righe: " + this.rowsDistribution +
+                "\nDistribuzione numero di colonne: " + this.colsDistribution +
+                "\nDistribuzione valori distinti: " + this.distinctValuesDistribution;
+    }
+
+    public void updateDistribution(TreeMap<Integer, Integer> distribution, int key) {
+        if (!distribution.containsKey(key)) {
+            distribution.put(key, 1);
+        } else {
+            distribution.put(key, distribution.get(key) + 1);
+        }
     }
 
     public void exportDataset() {
@@ -101,10 +74,7 @@ public class Dataset {
         this.incrementColsCounter(cols);
 
         //UPDATE DISTRIBUTIONS HASHMAP
-        if (!this.getRowsDistribution().containsKey(rows)) this.getRowsDistribution().put(rows, 1);
-        else this.incrementRowsDistribution(rows, rows);
-
-        if (!this.getColsDistribution().containsKey(cols)) this.getColsDistribution().put(cols, 1);
-        else this.incrementColsDistribution(cols, cols);
+        this.updateDistribution(this.getRowsDistribution(), rows);
+        this.updateDistribution(this.getColsDistribution(), cols);
     }
 }
