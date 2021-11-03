@@ -29,5 +29,5 @@ hs_err_pid*
 *.ipr
 
 # test file
-statistics.json
+*.json
 target/

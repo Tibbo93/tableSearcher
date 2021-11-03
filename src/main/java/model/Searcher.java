@@ -33,7 +33,8 @@ public class Searcher {
         query.stream()
                 .filter(cell -> !cell.isHeader())
                 .filter(cell -> !cell.getType().equals("EMPTY"))
-                .map(cell -> cell.getCleanedText().trim().toLowerCase(Locale.ROOT))
+                .map(cell -> cell.getCleanedText().toLowerCase().replaceAll("[\\p{Punct}]", "").trim())
+                .filter(s -> !s.isEmpty())
                 .distinct()
                 .forEach(token -> {
                     System.out.println("Analyzing token: " + token);

@@ -85,12 +85,15 @@ public class Indexer {
                             Document document = new Document();
                             document.add(new StringField("tableId", table.getMongoId().getOid(), Field.Store.YES));
                             list.forEach(cell -> {
-                                if (cell.isHeader()) {
-                                    document.add(new StringField("header", cell.getCleanedText().trim().toLowerCase(Locale.ROOT), Field.Store.YES));
-                                } else if (cell.getType().equals("EMPTY")) {
+                                if (cell.getType().equals("EMPTY")) {
                                     this.dataset.incrementNullValuesCounter();
                                 } else {
-                                    document.add(new StringField("content", cell.getCleanedText().trim().toLowerCase(Locale.ROOT), Field.Store.YES));
+                                    String str = cell.getCleanedText().toLowerCase().replaceAll("[\\p{Punct}]", "").trim();
+                                    if (cell.isHeader() && !str.isEmpty()) {
+                                        document.add(new StringField("header", str, Field.Store.YES));
+                                    } else if (!str.isEmpty()) {
+                                        document.add(new StringField("content", str, Field.Store.YES));
+                                    }
                                 }
                             });
 
