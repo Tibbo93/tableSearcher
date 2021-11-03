@@ -1,11 +1,12 @@
+package model;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import lombok.Data;
-import model.Dataset;
-import model.Table;
 import model.deserializer.TableDeserializer;
+import model.serializer.TableSerializer;
 import org.apache.lucene.codecs.simpletext.SimpleTextCodec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -14,44 +15,36 @@ import org.apache.lucene.index.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Locale;
+import java.util.*;
 
 @Data
-public class TableSearcher {
+public class Indexer {
     private Directory indexPathDirectory;
     private final Gson gson;
     private IndexWriter writer;
-    private IndexReader reader;
     private Dataset dataset;
 
-    public TableSearcher(Path indexPath) {
-        this.gson = new GsonBuilder().registerTypeAdapter(
-                        Table.class,
-                        new TableDeserializer())
-                .setPrettyPrinting().create();
+    public Indexer(Path indexPath) {
+        this.gson = new GsonBuilder()
+                .registerTypeAdapter(Table.class, new TableDeserializer())
+                .registerTypeAdapter(Table.class, new TableSerializer())
+                .create();
         this.dataset = new Dataset(0, 0, 0, 0);
         try {
             this.indexPathDirectory = FSDirectory.open(indexPath);
             this.writer = new IndexWriter(
                     this.indexPathDirectory,
                     new IndexWriterConfig().setCodec(new SimpleTextCodec()));
-            this.reader = DirectoryReader.open(this.indexPathDirectory);
         } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
         }
     }
 
-    public Table parseJSON(JsonReader jsonReader) {
-        return this.gson.fromJson(jsonReader, Table.class);
-    }
-
-    public void createIndex(String jsonPath) {
+    public void index(String jsonPath) {
+        Table largeTable = null;
         try (JsonReader jsonReader = new JsonReader(
                 new InputStreamReader(
                         new FileInputStream(jsonPath), StandardCharsets.UTF_8))) {
@@ -59,42 +52,66 @@ public class TableSearcher {
             this.writer.deleteAll();
             jsonReader.setLenient(true);
 
+            int maxRows = 0;
             while (jsonReader.hasNext() && jsonReader.peek() != JsonToken.END_DOCUMENT) {
                 Table table = parseJSON(jsonReader);
 
-                createDocument(table);
+                if (table.getMaxDimensions().getRow() > maxRows) {
+                    maxRows = table.getMaxDimensions().getRow();
+                    largeTable = table;
+                }
+
+                this.addDocument(table);
                 dataset.updateDataset(table.getMaxDimensions().getRow() + 1, table.getMaxDimensions().getColumn() + 1);
             }
+
+            this.exportTable(largeTable, "largeTable.json");
+
             this.writer.commit();
-        } catch (FileNotFoundException e) {
-            System.out.println("Error: FILE NOT FOUND");
+            this.writer.close();
+            this.indexPathDirectory.close();
         } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("Cannot index file. Error: " + e.getMessage());
         }
     }
 
-    public void createDocument(Table table) {
+    public Table parseJSON(JsonReader jsonReader) {
+        return this.gson.fromJson(jsonReader, Table.class);
+    }
+
+    private void addDocument(Table table) {
         table.getColumns()
                 .forEach((col, list) -> {
                             Document document = new Document();
                             document.add(new StringField("tableId", table.getMongoId().getOid(), Field.Store.YES));
                             list.forEach(cell -> {
                                 if (cell.isHeader()) {
-                                    document.add(new StringField("header", cell.getCleanedText().toLowerCase(Locale.ROOT), Field.Store.YES));
-                                } else if (cell.getCleanedText().isEmpty()) {
+                                    document.add(new StringField("header", cell.getCleanedText().trim().toLowerCase(Locale.ROOT), Field.Store.YES));
+                                } else if (cell.getType().equals("EMPTY")) {
                                     this.dataset.incrementNullValuesCounter();
                                 } else {
-                                    document.add(new StringField("content", cell.getCleanedText().toLowerCase(Locale.ROOT), Field.Store.YES));
+                                    document.add(new StringField("content", cell.getCleanedText().trim().toLowerCase(Locale.ROOT), Field.Store.YES));
                                 }
                             });
+
                             int distinctValues = (int) document.getFields().stream().map(IndexableField::stringValue).distinct().count();
                             this.dataset.updateDistribution(dataset.getDistinctValuesDistribution(), distinctValues);
+
                             try {
                                 this.writer.addDocument(document);
                             } catch (IOException e) {
-                                System.out.println("Error: " + e.getMessage());
+                                System.out.println("Cannot add document to index. Error: " + e.getMessage());
                             }
                         }
                 );
+    }
+
+    private void exportTable(Table table, String jasonName) {
+        String jsonString = this.gson.toJson(table);
+        try (FileWriter file = new FileWriter(jasonName)) {
+            file.write(jsonString);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

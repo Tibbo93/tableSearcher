@@ -32,6 +32,7 @@ public class Searcher {
 
         query.stream()
                 .filter(cell -> !cell.isHeader())
+                .filter(cell -> !cell.getType().equals("EMPTY"))
                 .map(cell -> cell.getCleanedText().trim().toLowerCase(Locale.ROOT))
                 .distinct()
                 .forEach(token -> {
@@ -45,9 +46,11 @@ public class Searcher {
                 });
 
         LinkedHashMap<Integer, Integer> sortedSet2count = this.sortSet2count(set2count);
+
+        this.indexDirectory.close();
+        this.reader.close();
+
         return this.getTopK(sortedSet2count, k);
-
-
     }
 
     private PostingsEnum getPostingList(String token, Terms terms) {

@@ -33,7 +33,7 @@ public class Dataset {
         this.colsCounter += count;
     }
 
-    public void incrementNullValueCounter() {
+    public void incrementNullValuesCounter() {
         this.nullValuesCounter++;
     }
 
