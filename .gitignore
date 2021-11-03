@@ -29,6 +29,5 @@ hs_err_pid*
 *.ipr
 
 # test file
-Test.java
 statistics.json
 target/
