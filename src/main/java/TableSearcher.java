@@ -10,9 +10,7 @@ import org.apache.lucene.codecs.simpletext.SimpleTextCodec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
@@ -29,6 +27,7 @@ public class TableSearcher {
     private Directory indexPathDirectory;
     private final Gson gson;
     private IndexWriter writer;
+    private IndexReader reader;
     private Dataset dataset;
 
     public TableSearcher(Path indexPath) {
@@ -42,6 +41,7 @@ public class TableSearcher {
             this.writer = new IndexWriter(
                     this.indexPathDirectory,
                     new IndexWriterConfig().setCodec(new SimpleTextCodec()));
+            this.reader = DirectoryReader.open(this.indexPathDirectory);
         } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
         }
@@ -77,6 +77,7 @@ public class TableSearcher {
         table.getColumns()
                 .forEach((col, list) -> {
                             Document document = new Document();
+                            document.add(new StringField("tableId", table.getMongoId().getOid(), Field.Store.YES));
                             list.forEach(cell -> {
                                 if (cell.isHeader()) {
                                     document.add(new StringField("header", cell.getCleanedText().toLowerCase(Locale.ROOT), Field.Store.YES));
