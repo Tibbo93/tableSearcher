@@ -1,6 +1,7 @@
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
+import model.Indexer;
 import model.Searcher;
 import model.Table;
 import model.deserializer.TableDeserializer;
@@ -23,11 +24,11 @@ public class Tester {
 
         long start = System.currentTimeMillis();
         Path indexPath = Paths.get(System.getenv("indexPath"));
-        TableSearcher tableSearcher = new TableSearcher(indexPath);
+        Indexer indexer = new Indexer(indexPath);
 
-        tableSearcher.createIndex(System.getenv("jsonPath"));
-        tableSearcher.getDataset().exportDataset();
-        System.out.println(tableSearcher.getDataset());
+        indexer.index(System.getenv("jsonPath"));
+        indexer.getDataset().exportDataset();
+        System.out.println(indexer.getDataset());
 
         System.out.println("\n===============================================================================================");
         System.out.println("END - Execution time: " + (System.currentTimeMillis() - start) / 1000 + " seconds");
