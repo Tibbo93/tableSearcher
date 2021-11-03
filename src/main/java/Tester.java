@@ -45,7 +45,7 @@ public class Tester {
 
         try {
             Table table = this.getTable(System.getenv("largeTablePath"));
-            List<Integer> topKSet = searcher.search(table.getColumns().get(0), 2);
+            List<Integer> topKSet = searcher.search(table.getColumns().get(0), 2, table.getMongoId().getOid());
 
             System.out.println("\n===============================================================================================");
             System.out.println("RESULT - k sets with highest counts: " + topKSet);

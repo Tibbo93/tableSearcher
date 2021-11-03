@@ -11,13 +11,16 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Data
 public class Searcher {
     private Directory indexDirectory;
     private IndexReader reader;
+    private List<Integer> docsIdToExclude;
 
     public Searcher(Path indexDirectory) {
+        this.docsIdToExclude = new ArrayList<>();
         try {
             this.indexDirectory = FSDirectory.open(indexDirectory);
             this.reader = DirectoryReader.open(this.indexDirectory);
@@ -26,14 +29,26 @@ public class Searcher {
         }
     }
 
-    public List<Integer> search(List<Cell> query, int k) throws IOException {
+    public List<Integer> search(List<Cell> query, int k, String tableId) throws IOException {
         HashMap<Integer, Integer> set2count = new HashMap<>();
         Terms terms = MultiTerms.getTerms(reader, "content");
+
+        docsIdToExclude = IntStream.range(0, this.reader.numDocs())
+                .boxed()
+                .filter(docId -> {
+                    try {
+                        return this.reader.document(docId).get("tableId").equals(tableId);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    return false;
+                })
+                .toList();
 
         query.stream()
                 .filter(cell -> !cell.isHeader())
                 .filter(cell -> !cell.getType().equals("EMPTY"))
-                .map(cell -> cell.getCleanedText().toLowerCase().replaceAll("[\\p{Punct}]", "").trim())
+                .map(cell -> cell.getCleanedText().toLowerCase().replaceAll("\\p{Punct}", "").trim())
                 .filter(s -> !s.isEmpty())
                 .distinct()
                 .forEach(token -> {
@@ -75,10 +90,12 @@ public class Searcher {
 
         try {
             while ((docID = postingList.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
-                if (!set2count.containsKey(docID)) {
-                    set2count.put(docID, 1);
-                } else {
-                    set2count.put(docID, set2count.get(docID) + 1);
+                if (!this.docsIdToExclude.contains(docID)) {
+                    if (!set2count.containsKey(docID)) {
+                        set2count.put(docID, 1);
+                    } else {
+                        set2count.put(docID, set2count.get(docID) + 1);
+                    }
                 }
             }
         } catch (IOException e) {

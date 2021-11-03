@@ -18,7 +18,6 @@ import org.apache.lucene.store.FSDirectory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.*;
 
 @Data
 public class Indexer {
@@ -44,7 +43,6 @@ public class Indexer {
     }
 
     public void index(String jsonPath) {
-        Table largeTable = null;
         try (JsonReader jsonReader = new JsonReader(
                 new InputStreamReader(
                         new FileInputStream(jsonPath), StandardCharsets.UTF_8))) {
@@ -52,20 +50,12 @@ public class Indexer {
             this.writer.deleteAll();
             jsonReader.setLenient(true);
 
-            int maxRows = 0;
             while (jsonReader.hasNext() && jsonReader.peek() != JsonToken.END_DOCUMENT) {
                 Table table = parseJSON(jsonReader);
-
-                if (table.getMaxDimensions().getRow() > maxRows) {
-                    maxRows = table.getMaxDimensions().getRow();
-                    largeTable = table;
-                }
 
                 this.addDocument(table);
                 dataset.updateDataset(table.getMaxDimensions().getRow() + 1, table.getMaxDimensions().getColumn() + 1);
             }
-
-            this.exportTable(largeTable, "largeTable.json");
 
             this.writer.commit();
             this.writer.close();
@@ -88,7 +78,7 @@ public class Indexer {
                                 if (cell.getType().equals("EMPTY")) {
                                     this.dataset.incrementNullValuesCounter();
                                 } else {
-                                    String str = cell.getCleanedText().toLowerCase().replaceAll("[\\p{Punct}]", "").trim();
+                                    String str = cell.getCleanedText().toLowerCase().replaceAll("\\p{Punct}", "").trim();
                                     if (cell.isHeader() && !str.isEmpty()) {
                                         document.add(new StringField("header", str, Field.Store.YES));
                                     } else if (!str.isEmpty()) {
@@ -109,7 +99,7 @@ public class Indexer {
                 );
     }
 
-    private void exportTable(Table table, String jasonName) {
+    public void exportTable(Table table, String jasonName) {
         String jsonString = this.gson.toJson(table);
         try (FileWriter file = new FileWriter(jasonName)) {
             file.write(jsonString);
