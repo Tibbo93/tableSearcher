@@ -18,6 +18,7 @@ import org.apache.lucene.store.FSDirectory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.*;
 
 @Data
 public class Indexer {
@@ -26,20 +27,16 @@ public class Indexer {
     private IndexWriter writer;
     private Dataset dataset;
 
-    public Indexer(Path indexPath) {
+    public Indexer(Path indexPath) throws IOException {
         this.gson = new GsonBuilder()
                 .registerTypeAdapter(Table.class, new TableDeserializer())
                 .registerTypeAdapter(Table.class, new TableSerializer())
                 .create();
-        this.dataset = new Dataset(0, 0, 0, 0);
-        try {
-            this.indexPathDirectory = FSDirectory.open(indexPath);
-            this.writer = new IndexWriter(
-                    this.indexPathDirectory,
-                    new IndexWriterConfig().setCodec(new SimpleTextCodec()));
-        } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
-        }
+        this.dataset = new Dataset();
+        this.indexPathDirectory = FSDirectory.open(indexPath);
+        this.writer = new IndexWriter(
+                this.indexPathDirectory,
+                new IndexWriterConfig().setCodec(new SimpleTextCodec()));
     }
 
     public void index(String jsonPath) {
@@ -52,9 +49,8 @@ public class Indexer {
 
             while (jsonReader.hasNext() && jsonReader.peek() != JsonToken.END_DOCUMENT) {
                 Table table = parseJSON(jsonReader);
-
                 this.addDocument(table);
-                dataset.updateDataset(table.getMaxDimensions().getRow() + 1, table.getMaxDimensions().getColumn() + 1);
+                this.dataset.updateDataset(table.getMaxDimensions().getRow() + 1, table.getMaxDimensions().getColumn() + 1);
             }
 
             this.writer.commit();
@@ -69,34 +65,30 @@ public class Indexer {
         return this.gson.fromJson(jsonReader, Table.class);
     }
 
-    private void addDocument(Table table) {
-        table.getColumns()
-                .forEach((col, list) -> {
-                            Document document = new Document();
-                            document.add(new StringField("tableId", table.getMongoId().getOid(), Field.Store.YES));
-                            list.forEach(cell -> {
-                                if (cell.getType().equals("EMPTY")) {
-                                    this.dataset.incrementNullValuesCounter();
-                                } else {
-                                    String str = cell.getCleanedText().toLowerCase().replaceAll("\\p{Punct}", "").trim();
-                                    if (cell.isHeader() && !str.isEmpty()) {
-                                        document.add(new StringField("header", str, Field.Store.YES));
-                                    } else if (!str.isEmpty()) {
-                                        document.add(new StringField("content", str, Field.Store.YES));
-                                    }
-                                }
-                            });
+    private void addDocument(Table table) throws IOException {
+        for (Map.Entry<Integer, List<Cell>> entry : table.getColumns().entrySet()) {
+            int nullValuesCounter = 0;
+            Document document = new Document();
+            document.add(new StringField("tableId", table.getMongoId().getOid(), Field.Store.YES));
 
-                            int distinctValues = (int) document.getFields().stream().map(IndexableField::stringValue).distinct().count();
-                            this.dataset.updateDistribution(dataset.getDistinctValuesDistribution(), distinctValues);
+            for (Cell cell : entry.getValue()) {
+                if (cell.getType().equals("EMPTY")) {
+                    this.dataset.incrementNullValuesCounter();
+                    nullValuesCounter++;
+                } else if (!cell.isHeader()) {
+                    String str = cell.getCleanedText().toLowerCase().replaceAll("\\p{Punct}", "").trim();
+                    if (!str.isEmpty()) {
+                        document.add(new StringField("text", str, Field.Store.YES));
+                    }
+                }
+            }
 
-                            try {
-                                this.writer.addDocument(document);
-                            } catch (IOException e) {
-                                System.out.println("Cannot add document to index. Error: " + e.getMessage());
-                            }
-                        }
-                );
+            int distinctValues = (int) Arrays.stream(document.getFields("text")).map(IndexableField::stringValue).distinct().count();
+
+            this.dataset.updateDistribution(this.dataset.getDistinctValuesDistribution(), distinctValues);
+            this.dataset.updateDistribution(this.dataset.getNullValuesDistribution(), nullValuesCounter);
+            writer.addDocument(document);
+        }
     }
 
     public void exportTable(Table table, String jasonName) {

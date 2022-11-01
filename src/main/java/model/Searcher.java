@@ -17,18 +17,30 @@ import java.util.stream.Collectors;
 public class Searcher {
     private Directory indexDirectory;
     private IndexReader reader;
+    private IndexSearcher searcher;
+    private Map<Integer, Long> executionTimeList;
 
     public Searcher(Path indexDirectory) {
         try {
             this.indexDirectory = FSDirectory.open(indexDirectory);
             this.reader = DirectoryReader.open(this.indexDirectory);
+            this.searcher = new IndexSearcher(this.reader);
+            this.executionTimeList = new HashMap<>();
         } catch (IOException e) {
             System.out.println("Cannot create Searcher object. Error: " + e.getMessage());
         }
     }
 
     public List<Integer> search(List<Cell> query, int k, String tableId) throws IOException {
-        return this.mergeList(this.filterQuery(query), k, tableId);
+        long startTime = System.currentTimeMillis();
+        List<Integer> topK = this.mergeList(this.filterQuery(query), k, tableId);
+        long endTime = System.currentTimeMillis();
+        this.executionTimeList.put(query.size(), endTime - startTime);
+
+        //this.indexDirectory.close();
+        //this.reader.close();
+
+        return topK;
     }
 
     public List<String> filterQuery(List<Cell> query) {
@@ -42,18 +54,17 @@ public class Searcher {
     }
 
     public List<Integer> mergeList(List<String> query, int k, String tableId) throws IOException {
-        IndexSearcher searcher = new IndexSearcher(this.reader);
         HashMap<Integer, Integer> set2count = new HashMap<>();
 
         for (String token : query) {
             TermQuery termQuery = new TermQuery(new Term("text", token));
-            TopDocs hits = searcher.search(termQuery, Integer.MAX_VALUE);
+            TopDocs hits = this.searcher.search(termQuery, Integer.MAX_VALUE);
 
             Arrays.stream(hits.scoreDocs)
                     .map(scoreDoc -> scoreDoc.doc)
                     .forEach(doc -> {
                         try {
-                            if (!searcher.doc(doc).get("tableId").equals(tableId)) {
+                            if (!this.searcher.doc(doc).get("tableId").equals(tableId)) {
                                 set2count.merge(doc, 1, Integer::sum);
                             }
                         } catch (IOException e) {
@@ -63,10 +74,6 @@ public class Searcher {
         }
 
         LinkedHashMap<Integer, Integer> sortedSet2Count = this.sortSet2count(set2count);
-
-        this.indexDirectory.close();
-        this.reader.close();
-
         return this.getTopK(sortedSet2Count, k);
     }
 
